@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getVendorOrders, cancelOrder, type Vendor, type Order } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
+import { supabase } from '../../lib/supabase';
 import { Loader2, Phone, Bike } from 'lucide-react';
 
 const STATUS_LABEL: Record<Order['status'], string> = {
@@ -41,7 +42,22 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
     }
   };
 
-  useEffect(() => { load(); }, [vendor.id]);
+  useEffect(() => {
+    load();
+
+    // Real-time: this vendor's orders update the moment a customer places
+    // one, a rider claims it, or its status changes — no manual refresh needed.
+    const channel = supabase
+      .channel(`vendor-orders-${vendor.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendor.id}` },
+        () => load()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [vendor.id]);
 
   const handleCancel = async (order: Order) => {
     if (!window.confirm('Cancel this order?')) return;
