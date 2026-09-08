@@ -12,6 +12,8 @@ import {
   UserCheck,
   X,
   Loader2,
+  Calendar,
+  Banknote,
 } from 'lucide-react';
 
 export default function RidersTab() {
@@ -19,6 +21,7 @@ export default function RidersTab() {
   const [riders, setRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [detailRider, setDetailRider] = useState<Rider | null>(null);
 
   const load = async () => {
     try {
@@ -74,6 +77,7 @@ export default function RidersTab() {
         <p className="text-sm text-gray-400 text-center py-8">Loading riders...</p>
       ) : (
         <>
+          {/* ── Pending applications ── */}
           {pending.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -145,6 +149,7 @@ export default function RidersTab() {
             </div>
           )}
 
+          {/* ── Active riders — now tappable to see their full profile ── */}
           <div>
             <h2 className="font-bold text-gray-900 mb-3">Active Riders</h2>
             {active.length === 0 ? (
@@ -156,7 +161,11 @@ export default function RidersTab() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="divide-y divide-gray-50">
                   {active.map((rider) => (
-                    <div key={rider.id} className="flex items-center justify-between px-5 py-4">
+                    <button
+                      key={rider.id}
+                      onClick={() => setDetailRider(rider)}
+                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition text-left"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-orange-50 flex items-center justify-center overflow-hidden">
                           {rider.photo_url ? (
@@ -180,13 +189,71 @@ export default function RidersTab() {
                           <Circle size={7} className="fill-current" /> {rider.is_online ? 'Online' : 'Offline'}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
             )}
           </div>
         </>
+      )}
+
+      {/* ── Rider detail modal ── */}
+      {detailRider && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setDetailRider(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {detailRider.photo_url ? (
+                    <img src={detailRider.photo_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Users size={22} className="text-gray-400" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-lg">{detailRider.profiles?.full_name ?? 'Rider'}</p>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full mt-1 ${detailRider.is_online ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <Circle size={6} className="fill-current" /> {detailRider.is_online ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setDetailRider(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-1 mb-5">
+              {[
+                { icon: Phone, label: 'Phone', value: detailRider.profiles?.phone },
+                { icon: Bike, label: 'Transport', value: detailRider.transport_type, capitalize: true },
+                { icon: MapPin, label: 'Home Area', value: detailRider.home_area },
+                { icon: IdCard, label: 'Ghana Card', value: detailRider.ghana_card_number },
+                { icon: Phone, label: 'Emergency Contact', value: detailRider.emergency_contact_name ? `${detailRider.emergency_contact_name} · ${detailRider.emergency_contact_phone}` : null },
+                { icon: Banknote, label: 'Deposit', value: detailRider.deposit_amount ? `GHS ${Number(detailRider.deposit_amount).toFixed(2)}` : 'None on file' },
+                { icon: Calendar, label: 'Joined', value: detailRider.created_at ? new Date(detailRider.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null },
+              ].map((row, i) => (
+                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                  <row.icon size={15} className="text-gray-400 shrink-0" />
+                  <span className={`text-sm text-gray-700 ${row.capitalize ? 'capitalize' : ''}`}>{row.value ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+
+            {Number(detailRider.commission_owed) > 0 && (
+              <div className="flex items-center gap-2 bg-orange-50 text-orange-700 text-sm font-semibold px-4 py-3 rounded-xl">
+                <HandCoins size={16} />
+                GHS {Number(detailRider.commission_owed).toFixed(2)} commission currently owed
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
