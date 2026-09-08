@@ -22,6 +22,7 @@ export default function RidersTab() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detailRider, setDetailRider] = useState<Rider | null>(null);
+  const [removingDetail, setRemovingDetail] = useState(false);
 
   const load = async () => {
     try {
@@ -66,6 +67,21 @@ export default function RidersTab() {
     }
   }
 
+  async function handleRemoveActiveRider(rider: Rider) {
+    if (!window.confirm(`Remove ${rider.profiles?.full_name ?? 'this rider'} entirely? Their login account will be deleted and this can't be undone.`)) return;
+    setRemovingDetail(true);
+    try {
+      await declineRiderApplication(rider.id);
+      setRiders((prev) => prev.filter((r) => r.id !== rider.id));
+      setDetailRider(null);
+      toastSuccess(`${rider.profiles?.full_name ?? 'Rider'} has been removed.`);
+    } catch (err: any) {
+      toastError(err.message || 'Could not remove this rider.');
+    } finally {
+      setRemovingDetail(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -77,7 +93,6 @@ export default function RidersTab() {
         <p className="text-sm text-gray-400 text-center py-8">Loading riders...</p>
       ) : (
         <>
-          {/* ── Pending applications ── */}
           {pending.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -149,7 +164,6 @@ export default function RidersTab() {
             </div>
           )}
 
-          {/* ── Active riders — now tappable to see their full profile ── */}
           <div>
             <h2 className="font-bold text-gray-900 mb-3">Active Riders</h2>
             {active.length === 0 ? (
@@ -198,7 +212,6 @@ export default function RidersTab() {
         </>
       )}
 
-      {/* ── Rider detail modal ── */}
       {detailRider && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
@@ -247,11 +260,20 @@ export default function RidersTab() {
             </div>
 
             {Number(detailRider.commission_owed) > 0 && (
-              <div className="flex items-center gap-2 bg-orange-50 text-orange-700 text-sm font-semibold px-4 py-3 rounded-xl">
+              <div className="flex items-center gap-2 bg-orange-50 text-orange-700 text-sm font-semibold px-4 py-3 rounded-xl mb-4">
                 <HandCoins size={16} />
                 GHS {Number(detailRider.commission_owed).toFixed(2)} commission currently owed
               </div>
             )}
+
+            <button
+              onClick={() => handleRemoveActiveRider(detailRider)}
+              disabled={removingDetail}
+              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 py-2.5 rounded-lg transition"
+            >
+              {removingDetail ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+              Remove Rider
+            </button>
           </div>
         </div>
       )}
