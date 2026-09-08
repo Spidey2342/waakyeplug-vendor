@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { LayoutDashboard, ClipboardList, UtensilsCrossed, Users, Settings, LogOut, Menu, X, Store } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, UtensilsCrossed, Settings, LogOut, Menu, X, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { label: 'Overview', icon: LayoutDashboard },
   { label: 'Orders', icon: ClipboardList },
   { label: 'Menu', icon: UtensilsCrossed },
-  { label: 'Riders', icon: Users },
   { label: 'Settings', icon: Settings },
 ];
 

@@ -3,7 +3,6 @@ import Sidebar from '../components/Sidebar';
 import OverviewTab from './tabs/OverviewTab';
 import OrdersTab from './tabs/OrdersTab';
 import MenuTab from './tabs/MenuTab';
-import RidersTab from './tabs/RidersTab';
 import SettingsTab from './tabs/SettingsTab';
 import type { Vendor } from '../lib/api';
 
@@ -14,7 +13,6 @@ export default function Dashboard({ vendor, onVendorUpdated }: { vendor: Vendor;
     Overview: <OverviewTab vendor={vendor} />,
     Orders: <OrdersTab vendor={vendor} />,
     Menu: <MenuTab vendor={vendor} />,
-    Riders: <RidersTab />,
     Settings: <SettingsTab vendor={vendor} onVendorUpdated={onVendorUpdated} />,
   };
 
