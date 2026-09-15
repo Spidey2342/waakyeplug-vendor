@@ -37,8 +37,12 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 }
 
 export async function requestPasswordReset(email: string) {
+  // Recovery link lands on the app ROOT (the Supabase project's Site URL),
+  // not /reset-password — this app has no routes. The link itself carries
+  // the session: AuthContext's onAuthStateChange picks it up, applySessionIfAdmin
+  // restores the admin, and the password is then changed in Settings.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+    redirectTo: window.location.origin,
   });
   if (error) throw error;
 }

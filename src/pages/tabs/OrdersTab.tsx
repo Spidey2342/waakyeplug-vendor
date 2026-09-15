@@ -4,10 +4,11 @@ import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { Loader2, Phone, Bike } from 'lucide-react';
 
+// Canonical order status enum (2026-09-12 migration) — matches the DB
+// check constraint exactly. 'pending'/'ready'/'accepted'/'preparing' are
+// ghosts that nothing may write anymore.
 const STATUS_LABEL: Record<Order['status'], string> = {
-  pending: 'Pending',
   available: 'Available to Riders',
-  ready: 'Available to Riders',
   rider_assigned: 'Rider Assigned',
   picked_up: 'Picked Up',
   delivered: 'Delivered',
@@ -15,9 +16,7 @@ const STATUS_LABEL: Record<Order['status'], string> = {
 };
 
 const statusStyle: Record<Order['status'], string> = {
-  pending: 'bg-gray-100 text-gray-600',
   available: 'bg-purple-50 text-purple-700',
-  ready: 'bg-purple-50 text-purple-700',
   rider_assigned: 'bg-blue-50 text-blue-700',
   picked_up: 'bg-indigo-50 text-indigo-700',
   delivered: 'bg-green-50 text-green-700',
@@ -133,7 +132,7 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
                   ) : !['delivered', 'cancelled'].includes(order.status) ? (
                     <span className="text-xs text-gray-400">No rider yet</span>
                   ) : null}
-                  {['pending', 'available', 'ready'].includes(order.status) && (
+                  {order.status === 'available' && (
                     <button
                       onClick={() => handleCancel(order)}
                       disabled={busyId === order.id}

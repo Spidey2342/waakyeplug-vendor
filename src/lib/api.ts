@@ -38,7 +38,7 @@ export type Order = {
   total_amount: number;
   delivery_address: string;
   payment_method: 'cash' | 'momo';
-  status: 'pending' | 'available' | 'ready' | 'rider_assigned' | 'picked_up' | 'delivered' | 'cancelled';
+  status: 'available' | 'rider_assigned' | 'picked_up' | 'delivered' | 'cancelled';
   created_at: string;
   profiles?: { full_name: string; phone: string | null };
   vendors?: { business_name: string };
@@ -222,19 +222,6 @@ export async function uploadVendorLogo(vendorId: string, file: File): Promise<st
 
 /* ORDERS ------------------------------------------------------------ */
 
-// Global, across every vendor — this is your monitoring view, not a
-// per-vendor kitchen queue.
-export async function getAllOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, profiles!orders_customer_id_fkey(full_name, phone), vendors(business_name), riders(profiles(full_name, phone))')
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (error) throw error;
-  return data as unknown as Order[];
-}
-
 // Scoped to one vendor — used inside that vendor's own Overview/Orders tabs.
 export async function getVendorOrders(vendorId: string): Promise<Order[]> {
   const { data, error } = await supabase
@@ -276,24 +263,36 @@ export async function getAllRiders(): Promise<Rider[]> {
   return data as unknown as Rider[];
 }
 
+// Approving goes through the admin-verified approve-rider edge function.
+// (The old direct anon-key update would be blocked by proper RLS — and
+// before RLS lockdown it let anyone self-approve.)
 export async function approveRiderApplication(riderId: string) {
-  const { data, error } = await supabase
-    .from('riders')
-    .update({ is_approved: true })
-    .eq('id', riderId)
-    .select()
-    .single();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in as admin to approve riders');
 
-  if (error) throw error;
-  return data as Rider;
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-rider`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ rider_id: riderId }),
+    }
+  );
+
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || 'Could not approve this rider');
+  return result.rider as Rider;
 }
 
-// Declining removes the application entirely. Their login account still
-// technically exists in Supabase Auth, but with no matching riders row
-// they can never successfully log in — good enough for now without
-// needing a separate admin-privileged account-deletion function.
+// Declining removes the application entirely (riders row, profile, and auth
+// account) via the admin-verified decline-rider edge function. Never call
+// this with the anon key — the function rejects it with 401.
 export async function declineRiderApplication(riderId: string) {
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in as admin to decline riders');
 
   const res = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/decline-rider`,
@@ -301,7 +300,7 @@ export async function declineRiderApplication(riderId: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ rider_id: riderId }),
     }

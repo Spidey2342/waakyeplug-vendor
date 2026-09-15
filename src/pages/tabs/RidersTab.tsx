@@ -68,6 +68,13 @@ export default function RidersTab() {
   }
 
   async function handleRemoveActiveRider(rider: Rider) {
+    // V4 guard (mirrored server-side in decline-rider): removing a rider
+    // deletes their row — and with it any outstanding commission debt.
+    // Block removal while money is owed so the debt can't silently vanish.
+    if (Number(rider.commission_owed) > 0) {
+      toastError(`Cannot remove ${rider.profiles?.full_name ?? 'this rider'}: GHS ${Number(rider.commission_owed).toFixed(2)} commission is still owed. Settle the balance first.`);
+      return;
+    }
     if (!window.confirm(`Remove ${rider.profiles?.full_name ?? 'this rider'} entirely? Their login account will be deleted and this can't be undone.`)) return;
     setRemovingDetail(true);
     try {
@@ -262,14 +269,15 @@ export default function RidersTab() {
             {Number(detailRider.commission_owed) > 0 && (
               <div className="flex items-center gap-2 bg-orange-50 text-orange-700 text-sm font-semibold px-4 py-3 rounded-xl mb-4">
                 <HandCoins size={16} />
-                GHS {Number(detailRider.commission_owed).toFixed(2)} commission currently owed
+                GHS {Number(detailRider.commission_owed).toFixed(2)} commission currently owed — settle it before removing this rider.
               </div>
             )}
 
             <button
               onClick={() => handleRemoveActiveRider(detailRider)}
-              disabled={removingDetail}
-              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 py-2.5 rounded-lg transition"
+              disabled={removingDetail || Number(detailRider.commission_owed) > 0}
+              title={Number(detailRider.commission_owed) > 0 ? 'Commission still owed — settle first' : undefined}
+              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:hover:bg-red-50 py-2.5 rounded-lg transition"
             >
               {removingDetail ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
               Remove Rider

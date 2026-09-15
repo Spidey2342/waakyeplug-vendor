@@ -33,7 +33,7 @@ export default function Sidebar({ active, setActive, shopName }: { active: strin
             <div className="w-9 h-9 bg-orange-600 rounded-lg flex items-center justify-center shrink-0"><Store size={18} className="text-white" /></div>
             <div className="min-w-0">
               <p className="font-bold text-gray-900 text-sm leading-none truncate">{shopName}</p>
-              <p className="text-xs text-orange-600 font-semibold mt-0.5">VENDOR</p>
+              <p className="text-xs text-orange-600 font-semibold mt-0.5">ADMIN</p>
             </div>
           </div>
           <button onClick={() => setOpen(false)} className="md:hidden text-gray-400 hover:text-gray-600"><X size={20} /></button>
