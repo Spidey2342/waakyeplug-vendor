@@ -78,13 +78,27 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
     setLocatingGps(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        const ACCURACY_THRESHOLD_METERS = 1000;
+        
+        if (!position.coords.accuracy || position.coords.accuracy > ACCURACY_THRESHOLD_METERS) {
+          toastError(
+            `Location accuracy too low (${position.coords.accuracy ? Math.round(position.coords.accuracy) + 'm' : 'unknown'}). ` +
+            'Please enable Precise Location in your device settings and stand outdoors with a clear view of the sky.'
+          );
+          setLocatingGps(false);
+          return;
+        }
+
         try {
           const updated = await updateVendor(vendor.id, {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
           onVendorUpdated(updated);
-          toastSuccess('Shop location saved. Customers can now see how far they are from you.');
+          toastSuccess(
+            `Shop location saved (accuracy: ${Math.round(position.coords.accuracy)}m). ` +
+            'Customers can now see how far they are from you.'
+          );
         } catch (err: any) {
           toastError(err.message || 'Could not save location.');
         } finally {
