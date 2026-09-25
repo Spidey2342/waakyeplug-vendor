@@ -234,16 +234,25 @@ export async function getVendorOrders(vendorId: string): Promise<Order[]> {
   return data as unknown as Order[];
 }
 
-export async function cancelOrder(orderId: string) {
-  const { data, error } = await supabase
-    .from('orders')
-    .update({ status: 'cancelled' })
-    .eq('id', orderId)
-    .select()
-    .single();
+export async function cancelOrder(orderId: string, cancelReason: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in as admin to cancel orders');
 
-  if (error) throw error;
-  return data as Order;
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-order`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ order_id: orderId, cancel_reason: cancelReason }),
+    }
+  );
+
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || 'Could not cancel this order');
+  return result.order as Order;
 }
 
 /* RIDERS ------------------------------------------------------------ */
