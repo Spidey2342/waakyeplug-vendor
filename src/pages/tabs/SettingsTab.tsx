@@ -2,7 +2,13 @@ import { useState, useRef } from 'react';
 import { updateVendor, uploadVendorLogo, type Vendor } from '../../lib/api';
 import { updatePassword } from '../../lib/auth';
 import { useToast } from '../../context/ToastContext';
-import { Store, KeyRound, MapPin, Loader2, CheckCircle2, Camera } from 'lucide-react';
+import { Store, KeyRound, MapPin, Loader2, CheckCircle2, Camera, Clock } from 'lucide-react';
+import {
+  formatDailyTimeLabel,
+  fromTimeInputValue,
+  toTimeInputValue,
+  vendorAcceptingOrders,
+} from '../../lib/vendorHours';
 
 export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendor; onVendorUpdated: (v: Vendor) => void }) {
   const { toastSuccess, toastError } = useToast();
@@ -46,6 +52,13 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
   });
   const [savingShop, setSavingShop] = useState(false);
   const [locatingGps, setLocatingGps] = useState(false);
+  const [hoursForm, setHoursForm] = useState({
+    opens: toTimeInputValue(vendor.daily_opens_at),
+    closes: toTimeInputValue(vendor.daily_closes_at),
+  });
+  const [savingHours, setSavingHours] = useState(false);
+
+  const acceptingNow = vendorAcceptingOrders(vendor);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -111,6 +124,26 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleHoursSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const daily_opens_at = fromTimeInputValue(hoursForm.opens);
+    const daily_closes_at = fromTimeInputValue(hoursForm.closes);
+    if (!daily_opens_at || !daily_closes_at) {
+      toastError('Set both opening and closing times. Without hours, customers see this shop as closed.');
+      return;
+    }
+    setSavingHours(true);
+    try {
+      const updated = await updateVendor(vendor.id, { daily_opens_at, daily_closes_at });
+      onVendorUpdated(updated);
+      toastSuccess('Ordering hours saved.');
+    } catch (err: any) {
+      toastError(err.message || 'Could not save hours.');
+    } finally {
+      setSavingHours(false);
+    }
   };
 
   const toggleOpen = async () => {
@@ -187,12 +220,71 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Clock size={18} className="text-orange-600" />
+          <h2 className="font-bold text-gray-900">Ordering hours</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Ghana local time. Customers can only order when the current time is inside this window, the{' '}
+          <span className="font-medium">Open</span> toggle is on, and the platform is still open (9 PM cutoff).
+        </p>
+        <p
+          className={`text-sm font-semibold mb-4 px-3 py-2 rounded-xl ${
+            acceptingNow ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'
+          }`}
+        >
+          {acceptingNow
+            ? 'Accepting orders right now'
+            : !vendor.is_open
+              ? 'Toggle is closed — not accepting orders'
+              : !vendor.daily_opens_at || !vendor.daily_closes_at
+                ? 'Set hours below — missing hours = closed on the customer app'
+                : 'Outside today’s hours — closed for customers'}
+        </p>
+        <form onSubmit={handleHoursSubmit} className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Opens</label>
+              <input
+                type="time"
+                value={hoursForm.opens}
+                onChange={(e) => setHoursForm({ ...hoursForm, opens: e.target.value })}
+                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Closes</label>
+              <input
+                type="time"
+                value={hoursForm.closes}
+                onChange={(e) => setHoursForm({ ...hoursForm, closes: e.target.value })}
+                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+          </div>
+          {(vendor.daily_opens_at || vendor.daily_closes_at) && (
+            <p className="text-xs text-gray-400">
+              Saved: {formatDailyTimeLabel(vendor.daily_opens_at)} – {formatDailyTimeLabel(vendor.daily_closes_at)}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={savingHours}
+            className="self-start bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
+          >
+            {savingHours ? 'Saving...' : 'Save ordering hours'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Store size={18} className="text-orange-600" />
-            <h2 className="font-bold text-gray-900">Shop Status</h2>
+            <h2 className="font-bold text-gray-900">Shop status toggle</h2>
           </div>
           <button
+            type="button"
             onClick={toggleOpen}
             className={`text-sm font-semibold px-4 py-2 rounded-full transition
               ${vendor.is_open ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -200,24 +292,9 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
             {vendor.is_open ? 'Open — tap to close' : 'Closed — tap to open'}
           </button>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-  <div className="flex items-center justify-between">
-    <div>
-      <h2 className="font-bold text-gray-900">Build Your Own</h2>
-      <p className="text-sm text-gray-500 mt-0.5 max-w-xs">
-        When on, customers can customize a bowl from this vendor's Size/Protein/Extra items.
-        When off, only fixed items (Combos) show — no build option appears for this vendor.
-      </p>
-    </div>
-    <button
-      onClick={toggleSupportsBuild}
-      className={`shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition
-        ${vendor.supports_build ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-    >
-      {vendor.supports_build ? 'On' : 'Off'}
-    </button>
-  </div>
-</div>
+        <p className="text-sm text-gray-500 mb-4">
+          Manual override. Turn off when the kitchen is paused even during scheduled hours.
+        </p>
 
         <form onSubmit={handleShopSubmit} className="flex flex-col gap-3">
           <div>
@@ -244,6 +321,25 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
             {savingShop ? 'Saving...' : 'Save Shop Details'}
           </button>
         </form>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-gray-900">Build Your Own</h2>
+            <p className="text-sm text-gray-500 mt-0.5 max-w-xs">
+              When on, customers can customize a bowl from this vendor&apos;s Size/Protein/Extra items.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleSupportsBuild}
+            className={`shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition
+              ${vendor.supports_build ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+          >
+            {vendor.supports_build ? 'On' : 'Off'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

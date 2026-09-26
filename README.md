@@ -44,6 +44,7 @@ Build: `npm run build` → `tsc && vite build` (verified 2026-09-15).
 | [docs/FEATURES.md](docs/FEATURES.md) | Every page, tab, lib, and API function |
 | [docs/SETUP.md](docs/SETUP.md) | Env, admin account bootstrap, storage |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Vendor onboarding, rider approvals, cancellations |
+| [docs/VENDOR_ORDERING_HOURS.md](docs/VENDOR_ORDERING_HOURS.md) | **Ordering hours UI + DB columns** (team rollout) |
 | [VENDOR_AUDIT.md](VENDOR_AUDIT.md) | Security/bug audit + fix log (keep) |
 
 ## Platform constants
@@ -63,7 +64,7 @@ Build: `npm run build` → `tsc && vite build` (verified 2026-09-15).
 
 - **RidersTab has no realtime** — new applications while the tab is open require a refresh
 - `payment_method: 'cash' | 'momo'` — momo type exists; **no customer Paystack/momo integration wired** (Paystack is rider settlements only)
-- Lumora product decisions still open on **customer** side: breakfast (P3) + opening hours (P4)
+- Customer **breakfast (P3)** still “coming soon”; vendor **daily hours** are configured here — see [docs/VENDOR_ORDERING_HOURS.md](docs/VENDOR_ORDERING_HOURS.md)
 - Admin accounts are created manually in Supabase (no self-registration)
 
 ## Important

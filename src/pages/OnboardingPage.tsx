@@ -1,11 +1,20 @@
 import { useState } from 'react';
 import { Store } from 'lucide-react';
 import { createVendor, type Vendor } from '../lib/api';
+import { fromTimeInputValue } from '../lib/vendorHours';
 import { useToast } from '../context/ToastContext';
 
 export default function OnboardingPage({ onCreated, onCancel }: { onCreated: (vendor: Vendor) => void; onCancel: () => void }) {
   const { toastError } = useToast();
-  const [form, setForm] = useState({ businessName: '', description: '', location: '', phone: '', supportsBuild: false });
+  const [form, setForm] = useState({
+    businessName: '',
+    description: '',
+    location: '',
+    phone: '',
+    supportsBuild: false,
+    opens: '07:00',
+    closes: '20:00',
+  });
   const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -18,6 +27,12 @@ export default function OnboardingPage({ onCreated, onCancel }: { onCreated: (ve
       toastError('Shop name and location are required.');
       return;
     }
+    const dailyOpensAt = fromTimeInputValue(form.opens);
+    const dailyClosesAt = fromTimeInputValue(form.closes);
+    if (!dailyOpensAt || !dailyClosesAt) {
+      toastError('Set valid opening and closing times.');
+      return;
+    }
     setSubmitting(true);
     try {
       const vendor = await createVendor({
@@ -26,6 +41,8 @@ export default function OnboardingPage({ onCreated, onCancel }: { onCreated: (ve
         location: form.location,
         phone: form.phone,
         supportsBuild: form.supportsBuild,
+        dailyOpensAt,
+        dailyClosesAt,
       });
       onCreated(vendor);
     } catch (err: any) {
@@ -66,6 +83,25 @@ export default function OnboardingPage({ onCreated, onCancel }: { onCreated: (ve
             <label className="block text-sm font-medium text-gray-700 mb-1">Shop Phone</label>
             <input name="phone" value={form.phone} onChange={handleChange} placeholder="e.g. 024 XXX XXXX"
               className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-600 focus:ring-2 focus:ring-orange-100" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ordering hours (Ghana time)</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="time"
+                value={form.opens}
+                onChange={(e) => setForm({ ...form, opens: e.target.value })}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+              />
+              <input
+                type="time"
+                value={form.closes}
+                onChange={(e) => setForm({ ...form, closes: e.target.value })}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Opens · Closes — required for customers to see this shop as open.</p>
           </div>
 
           <label className="flex items-start gap-3 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 cursor-pointer">

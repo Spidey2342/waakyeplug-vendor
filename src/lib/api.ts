@@ -14,6 +14,8 @@ export type Vendor = {
   is_open: boolean;
   logo_url: string | null;
   supports_build: boolean;
+  daily_opens_at: string | null;
+  daily_closes_at: string | null;
   created_at: string;
 };
 
@@ -93,8 +95,22 @@ export async function getVendorById(vendorId: string): Promise<Vendor | null> {
 // approved AND open — a vendor should never sit invisible/unorderable
 // just because someone forgot to flip a toggle after adding it.
 export async function createVendor({
-  businessName, description, location, phone, supportsBuild,
-}: { businessName: string; description: string; location: string; phone: string; supportsBuild: boolean }) {
+  businessName,
+  description,
+  location,
+  phone,
+  supportsBuild,
+  dailyOpensAt,
+  dailyClosesAt,
+}: {
+  businessName: string;
+  description: string;
+  location: string;
+  phone: string;
+  supportsBuild: boolean;
+  dailyOpensAt: string;
+  dailyClosesAt: string;
+}) {
   const { data, error } = await supabase
     .from('vendors')
     .insert({
@@ -107,6 +123,8 @@ export async function createVendor({
       added_by_admin: true,
       supports_build: supportsBuild,
       is_open: true,
+      daily_opens_at: dailyOpensAt,
+      daily_closes_at: dailyClosesAt,
     })
     .select()
     .single();
@@ -117,7 +135,22 @@ export async function createVendor({
 
 export async function updateVendor(
   vendorId: string,
-  updates: Partial<Pick<Vendor, 'business_name' | 'description' | 'location' | 'phone' | 'is_open' | 'latitude' | 'longitude' | 'logo_url' | 'supports_build'>>
+  updates: Partial<
+    Pick<
+      Vendor,
+      | 'business_name'
+      | 'description'
+      | 'location'
+      | 'phone'
+      | 'is_open'
+      | 'latitude'
+      | 'longitude'
+      | 'logo_url'
+      | 'supports_build'
+      | 'daily_opens_at'
+      | 'daily_closes_at'
+    >
+  >
 ) {
   const { data, error } = await supabase
     .from('vendors')
