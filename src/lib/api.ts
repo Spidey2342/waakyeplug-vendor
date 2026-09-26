@@ -54,6 +54,8 @@ export type Rider = {
   transport_type: string | null;
   photo_url: string | null;
   ghana_card_number: string | null;
+  ghana_card_front_url: string | null;
+  ghana_card_back_url: string | null;
   home_area: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
@@ -255,7 +257,7 @@ export async function getAllRiders(): Promise<Rider[]> {
   const { data, error } = await supabase
     .from('riders')
     .select(
-      'id, profile_id, is_online, is_approved, commission_owed, transport_type, photo_url, ghana_card_number, home_area, emergency_contact_name, emergency_contact_phone, deposit_amount, created_at, profiles(full_name, phone)'
+      'id, profile_id, is_online, is_approved, commission_owed, transport_type, photo_url, ghana_card_number, ghana_card_front_url, ghana_card_back_url, home_area, emergency_contact_name, emergency_contact_phone, deposit_amount, created_at, profiles(full_name, phone)'
     )
     .order('created_at', { ascending: false });
 
