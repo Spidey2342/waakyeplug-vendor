@@ -6,7 +6,6 @@ import {
   Circle,
   Bike,
   HandCoins,
-  IdCard,
   MapPin,
   Phone,
   UserCheck,
@@ -15,6 +14,7 @@ import {
   Calendar,
   Banknote,
 } from 'lucide-react';
+import { RiderKycGallery } from '../../components/RiderKycGallery';
 
 export default function RidersTab() {
   const { toastSuccess, toastError } = useToast();
@@ -134,10 +134,6 @@ export default function RidersTab() {
                         <MapPin size={12} className="text-gray-400 shrink-0" />
                         <span className="truncate">{rider.home_area ?? '—'}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 col-span-2">
-                        <IdCard size={12} className="text-gray-400 shrink-0" />
-                        <span className="truncate">{rider.ghana_card_number ?? '—'}</span>
-                      </div>
                       {rider.emergency_contact_name && (
                         <div className="flex items-center gap-1.5 col-span-2">
                           <Phone size={12} className="text-gray-400 shrink-0" />
@@ -146,6 +142,12 @@ export default function RidersTab() {
                           </span>
                         </div>
                       )}
+                    </div>
+
+                    <div className="mb-4">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">ID verification</p>
+                      <RiderKycGallery rider={rider} compact />
+                      <p className="text-[10px] text-gray-400 mt-2">Tap a photo to open full size before approving.</p>
                     </div>
 
                     <div className="flex gap-2">
@@ -249,12 +251,16 @@ export default function RidersTab() {
               </button>
             </div>
 
+            <div className="mb-5">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">ID verification</p>
+              <RiderKycGallery rider={detailRider} />
+            </div>
+
             <div className="space-y-1 mb-5">
               {[
                 { icon: Phone, label: 'Phone', value: detailRider.profiles?.phone },
                 { icon: Bike, label: 'Transport', value: detailRider.transport_type, capitalize: true },
                 { icon: MapPin, label: 'Home Area', value: detailRider.home_area },
-                { icon: IdCard, label: 'Ghana Card', value: detailRider.ghana_card_number },
                 { icon: Phone, label: 'Emergency Contact', value: detailRider.emergency_contact_name ? `${detailRider.emergency_contact_name} · ${detailRider.emergency_contact_phone}` : null },
                 { icon: Banknote, label: 'Deposit', value: detailRider.deposit_amount ? `GHS ${Number(detailRider.deposit_amount).toFixed(2)}` : 'None on file' },
                 { icon: Calendar, label: 'Joined', value: detailRider.created_at ? new Date(detailRider.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null },
