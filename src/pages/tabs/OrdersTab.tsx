@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getVendorOrders, cancelOrder, type Vendor, type Order } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
-import { Loader2, Phone, Bike } from 'lucide-react';
+import { Loader2, Phone, Bike, X } from 'lucide-react';
 
 // Canonical order status enum (2026-09-12 migration) — matches the DB
 // check constraint exactly. 'pending'/'ready'/'accepted'/'preparing' are
@@ -29,6 +29,8 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'active' | 'all'>('active');
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const load = async () => {
     try {
@@ -58,13 +60,29 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
     return () => { supabase.removeChannel(channel); };
   }, [vendor.id]);
 
-  const handleCancel = async (order: Order) => {
-    if (!window.confirm('Cancel this order?')) return;
-    setBusyId(order.id);
+  const openCancelModal = (order: Order) => {
+    setCancelModalOrder(order);
+    setCancelReason('');
+  };
+
+  const closeCancelModal = () => {
+    setCancelModalOrder(null);
+    setCancelReason('');
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelModalOrder) return;
+    if (!cancelReason.trim()) {
+      toastError('Please provide a cancel reason.');
+      return;
+    }
+
+    setBusyId(cancelModalOrder.id);
     try {
-      await cancelOrder(order.id);
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: 'cancelled' } : o)));
+      await cancelOrder(cancelModalOrder.id, cancelReason.trim());
+      setOrders((prev) => prev.map((o) => (o.id === cancelModalOrder.id ? { ...o, status: 'cancelled' } : o)));
       toastSuccess('Order cancelled.');
+      closeCancelModal();
     } catch (err: any) {
       toastError(err.message || 'Could not cancel order.');
     } finally {
@@ -132,9 +150,9 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
                   ) : !['delivered', 'cancelled'].includes(order.status) ? (
                     <span className="text-xs text-gray-400">No rider yet</span>
                   ) : null}
-                  {order.status === 'available' && (
+                  {['available', 'rider_assigned', 'picked_up'].includes(order.status) && (
                     <button
-                      onClick={() => handleCancel(order)}
+                      onClick={() => openCancelModal(order)}
                       disabled={busyId === order.id}
                       className="flex items-center gap-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 px-4 py-2 rounded-lg transition"
                     >
@@ -146,6 +164,72 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Cancel Order</h2>
+              <button
+                onClick={closeCancelModal}
+                disabled={busyId === cancelModalOrder.id}
+                className="text-gray-400 hover:text-gray-600 transition disabled:opacity-50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Order for <span className="font-semibold">{cancelModalOrder.profiles?.full_name ?? 'Customer'}</span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Current status: <span className="font-medium">{STATUS_LABEL[cancelModalOrder.status]}</span>
+              </p>
+              {cancelModalOrder.status === 'picked_up' && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-800">
+                    <strong>Note:</strong> Cancelling after pickup will charge the customer 70% of the delivery fee on their next order.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cancel Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Please provide a reason for cancelling this order..."
+                disabled={busyId === cancelModalOrder.id}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50 text-sm"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeCancelModal}
+                disabled={busyId === cancelModalOrder.id}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleCancelConfirm}
+                disabled={busyId === cancelModalOrder.id || !cancelReason.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {busyId === cancelModalOrder.id && <Loader2 size={14} className="animate-spin" />}
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
