@@ -172,41 +172,7 @@ export async function deleteVendorMenuItems(vendorId: string) {
 
 export type DeleteVendorResult = { outcome: 'deleted' } | { outcome: 'archived'; message: string };
 
-/**
- * Removes a vendor from the platform. Tries the admin edge function first;
- * falls back to client deletes. If past orders block a hard delete, archives
- * the vendor (suspended + closed) so order history stays intact.
- */
-export async function deleteVendor(vendorId: string): Promise<DeleteVendorResult> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('You must be signed in as admin to delete vendors');
-
-  const edgeRes = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vendor`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ vendor_id: vendorId }),
-    }
-  );
-
-  if (edgeRes.ok) return { outcome: 'deleted' };
-
-  // Edge not deployed or rejected — attempt direct cleanup with the admin session.
-  if (edgeRes.status !== 404 && edgeRes.status !== 405) {
-    let message = 'Could not delete this vendor.';
-    try {
-      const body = await edgeRes.json();
-      if (body?.error) message = body.error;
-    } catch {
-      /* ignore */
-    }
-    if (edgeRes.status !== 501) throw new Error(message);
-  }
-
+async function deleteVendorDirect(vendorId: string): Promise<DeleteVendorResult> {
   await deleteVendorMenuItems(vendorId);
 
   const { error: vendorDeleteError } = await supabase.from('vendors').delete().eq('id', vendorId);
@@ -218,14 +184,64 @@ export async function deleteVendor(vendorId: string): Promise<DeleteVendorResult
 
   if (!fkBlocked) throw vendorDeleteError;
 
-  const archived = await updateVendor(vendorId, { status: 'suspended', is_open: false });
-  void archived;
+  await updateVendor(vendorId, { status: 'suspended', is_open: false });
 
   return {
     outcome: 'archived',
     message:
       'This vendor has past orders, so the shop was archived instead of deleted. Order history is kept under History.',
   };
+}
+
+/** Optional edge path when `delete-vendor` is deployed on the Supabase project. */
+async function tryDeleteVendorEdge(vendorId: string, accessToken: string): Promise<boolean> {
+  try {
+    const edgeRes = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vendor`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ vendor_id: vendorId }),
+      }
+    );
+
+    if (edgeRes.ok) return true;
+
+    // Not deployed — use direct Supabase deletes below.
+    if (edgeRes.status === 404 || edgeRes.status === 405 || edgeRes.status === 501) return false;
+
+    let message = 'Could not delete this vendor.';
+    try {
+      const body = await edgeRes.json();
+      if (body?.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  } catch (err: unknown) {
+    // Network/CORS (e.g. function not deployed) — don't surface "Failed to fetch".
+    if (err instanceof Error && err.message !== 'Failed to fetch' && !err.message.includes('fetch')) {
+      throw err;
+    }
+    return false;
+  }
+}
+
+/**
+ * Removes a vendor from the platform. Uses direct Supabase deletes by default;
+ * if `delete-vendor` edge exists and succeeds, that path is used instead.
+ */
+export async function deleteVendor(vendorId: string): Promise<DeleteVendorResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in as admin to delete vendors');
+
+  const edgeDeleted = await tryDeleteVendorEdge(vendorId, session.access_token);
+  if (edgeDeleted) return { outcome: 'deleted' };
+
+  return deleteVendorDirect(vendorId);
 }
 
 /* MENU ------------------------------------------------------------ */
