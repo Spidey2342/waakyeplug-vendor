@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getAllVendors, type Vendor } from '../lib/api';
+import { getAllVendors, deleteVendor, type Vendor } from '../lib/api';
 import { useToast } from '../context/ToastContext';
-import { Store, Plus, ChevronLeft, ToggleLeft, ChevronRight, Users } from 'lucide-react';
+import { Store, Plus, ChevronLeft, ToggleLeft, ChevronRight, Users, Trash2, Loader2 } from 'lucide-react';
 import OnboardingPage from './OnboardingPage';
 import Dashboard from './Dashboard';
 import RidersTab from './tabs/RidersTab';
@@ -9,7 +9,8 @@ import RidersTab from './tabs/RidersTab';
 type TopLevelView = 'vendors' | 'riders';
 
 export default function AdminHome() {
-  const { toastError } = useToast();
+  const { toastError, toastSuccess } = useToast();
+  const [deletingVendorId, setDeletingVendorId] = useState<string | null>(null);
   const [view, setView] = useState<TopLevelView>('vendors');
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,10 @@ export default function AdminHome() {
           onVendorUpdated={(v) => {
             setSelectedVendor(v);
             setVendors((prev) => prev.map((existing) => (existing.id === v.id ? v : existing)));
+          }}
+          onVendorRemoved={(vendorId) => {
+            setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+            setSelectedVendor(null);
           }}
         />
       </div>
@@ -116,36 +121,71 @@ export default function AdminHome() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="divide-y divide-gray-50">
                   {vendors.map((vendor) => (
-                    <button
+                    <div
                       key={vendor.id}
-                      onClick={() => setSelectedVendor(vendor)}
-                      className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition text-left"
+                      className="flex items-center gap-2 px-5 py-4 hover:bg-gray-50 transition"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 overflow-hidden">
-                          {vendor.logo_url ? (
-                            <img src={vendor.logo_url} alt={vendor.business_name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Store size={18} className="text-orange-500" />
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVendor(vendor)}
+                        className="flex-1 flex items-center justify-between min-w-0 text-left"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 overflow-hidden">
+                            {vendor.logo_url ? (
+                              <img src={vendor.logo_url} alt={vendor.business_name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Store size={18} className="text-orange-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-800 text-sm truncate">{vendor.business_name}</p>
+                            <p className="text-xs text-gray-400 truncate">{vendor.location || 'No location set'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          {vendor.status === 'suspended' && (
+                            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full">ARCHIVED</span>
                           )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm truncate">{vendor.business_name}</p>
-                          <p className="text-xs text-gray-400 truncate">{vendor.location || 'No location set'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {vendor.supports_build && (
-                          <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-                            <ToggleLeft size={12} /> BUILD
+                          {vendor.supports_build && (
+                            <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                              <ToggleLeft size={12} /> BUILD
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendor.is_open ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {vendor.is_open ? 'OPEN' : 'CLOSED'}
                           </span>
-                        )}
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendor.is_open ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {vendor.is_open ? 'OPEN' : 'CLOSED'}
-                        </span>
-                        <ChevronRight size={16} className="text-gray-300" />
-                      </div>
-                    </button>
+                          <ChevronRight size={16} className="text-gray-300" />
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        title="Remove vendor"
+                        disabled={deletingVendorId === vendor.id}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`Remove "${vendor.business_name}" from the platform?`)) return;
+                          setDeletingVendorId(vendor.id);
+                          try {
+                            const result = await deleteVendor(vendor.id);
+                            if (result.outcome === 'deleted') {
+                              setVendors((prev) => prev.filter((v) => v.id !== vendor.id));
+                              toastSuccess(`"${vendor.business_name}" was removed.`);
+                            } else {
+                              toastSuccess(result.message);
+                              await loadVendors();
+                            }
+                          } catch (err: any) {
+                            toastError(err.message || 'Could not remove vendor.');
+                          } finally {
+                            setDeletingVendorId(null);
+                          }
+                        }}
+                        className="shrink-0 p-2 text-gray-300 hover:text-red-600 disabled:opacity-50 transition"
+                      >
+                        {deletingVendorId === vendor.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>

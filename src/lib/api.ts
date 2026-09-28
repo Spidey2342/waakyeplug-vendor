@@ -149,6 +149,7 @@ export async function updateVendor(
       | 'supports_build'
       | 'daily_opens_at'
       | 'daily_closes_at'
+      | 'status'
     >
   >
 ) {
@@ -161,6 +162,70 @@ export async function updateVendor(
 
   if (error) throw error;
   return data as Vendor;
+}
+
+/** Removes all menu rows for a vendor (always safe before removing the shop). */
+export async function deleteVendorMenuItems(vendorId: string) {
+  const { error } = await supabase.from('vendor_menu_items').delete().eq('vendor_id', vendorId);
+  if (error) throw error;
+}
+
+export type DeleteVendorResult = { outcome: 'deleted' } | { outcome: 'archived'; message: string };
+
+/**
+ * Removes a vendor from the platform. Tries the admin edge function first;
+ * falls back to client deletes. If past orders block a hard delete, archives
+ * the vendor (suspended + closed) so order history stays intact.
+ */
+export async function deleteVendor(vendorId: string): Promise<DeleteVendorResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You must be signed in as admin to delete vendors');
+
+  const edgeRes = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vendor`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ vendor_id: vendorId }),
+    }
+  );
+
+  if (edgeRes.ok) return { outcome: 'deleted' };
+
+  // Edge not deployed or rejected — attempt direct cleanup with the admin session.
+  if (edgeRes.status !== 404 && edgeRes.status !== 405) {
+    let message = 'Could not delete this vendor.';
+    try {
+      const body = await edgeRes.json();
+      if (body?.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    if (edgeRes.status !== 501) throw new Error(message);
+  }
+
+  await deleteVendorMenuItems(vendorId);
+
+  const { error: vendorDeleteError } = await supabase.from('vendors').delete().eq('id', vendorId);
+  if (!vendorDeleteError) return { outcome: 'deleted' };
+
+  const fkBlocked =
+    vendorDeleteError.code === '23503'
+    || /foreign key|violates.*constraint|referenced/i.test(vendorDeleteError.message ?? '');
+
+  if (!fkBlocked) throw vendorDeleteError;
+
+  const archived = await updateVendor(vendorId, { status: 'suspended', is_open: false });
+  void archived;
+
+  return {
+    outcome: 'archived',
+    message:
+      'This vendor has past orders, so the shop was archived instead of deleted. Order history is kept under History.',
+  };
 }
 
 /* MENU ------------------------------------------------------------ */

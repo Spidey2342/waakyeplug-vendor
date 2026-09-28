@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
-import { updateVendor, uploadVendorLogo, type Vendor } from '../../lib/api';
+import { updateVendor, uploadVendorLogo, deleteVendor, getVendorById, type Vendor } from '../../lib/api';
 import { updatePassword } from '../../lib/auth';
 import { useToast } from '../../context/ToastContext';
-import { Store, KeyRound, MapPin, Loader2, CheckCircle2, Camera, Clock } from 'lucide-react';
+import { Store, KeyRound, MapPin, Loader2, CheckCircle2, Camera, Clock, Trash2 } from 'lucide-react';
 import {
   formatDailyTimeLabel,
   fromTimeInputValue,
@@ -10,8 +10,17 @@ import {
   vendorAcceptingOrders,
 } from '../../lib/vendorHours';
 
-export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendor; onVendorUpdated: (v: Vendor) => void }) {
+export default function SettingsTab({
+  vendor,
+  onVendorUpdated,
+  onVendorRemoved,
+}: {
+  vendor: Vendor;
+  onVendorUpdated: (v: Vendor) => void;
+  onVendorRemoved: (vendorId: string) => void;
+}) {
   const { toastSuccess, toastError } = useToast();
+  const [deletingVendor, setDeletingVendor] = useState(false);
 
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
@@ -371,6 +380,46 @@ export default function SettingsTab({ vendor, onVendorUpdated }: { vendor: Vendo
         >
           {locatingGps ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}
           {locatingGps ? 'Getting Location...' : vendor.latitude ? 'Update My Location' : 'Use My Current Location'}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Trash2 size={18} className="text-red-600" />
+          <h2 className="font-bold text-gray-900">Remove vendor</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Deletes this shop and its menu from the platform. If customers have ordered here before, the vendor is archived instead so order history stays under History.
+        </p>
+        <button
+          type="button"
+          disabled={deletingVendor}
+          onClick={async () => {
+            const ok = window.confirm(
+              `Remove "${vendor.business_name}" from the platform?\n\nMenu items will be deleted. Past orders may prevent a full delete — those are kept in History.`
+            );
+            if (!ok) return;
+            setDeletingVendor(true);
+            try {
+              const result = await deleteVendor(vendor.id);
+              if (result.outcome === 'deleted') {
+                toastSuccess(`"${vendor.business_name}" was removed.`);
+                onVendorRemoved(vendor.id);
+              } else {
+                toastSuccess(result.message);
+                const refreshed = await getVendorById(vendor.id);
+                if (refreshed) onVendorUpdated(refreshed);
+              }
+            } catch (err: any) {
+              toastError(err.message || 'Could not remove this vendor.');
+            } finally {
+              setDeletingVendor(false);
+            }
+          }}
+          className="flex items-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
+        >
+          {deletingVendor ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+          {deletingVendor ? 'Removing...' : 'Delete vendor'}
         </button>
       </div>
 

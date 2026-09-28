@@ -3,6 +3,7 @@ import { getVendorOrders, cancelOrder, type Vendor, type Order } from '../../lib
 import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { Loader2, Phone, Bike } from 'lucide-react';
+import OrderItemsList from '../../components/OrderItemsList';
 
 // Canonical order status enum (2026-09-12 migration) — matches the DB
 // check constraint exactly. 'pending'/'ready'/'accepted'/'preparing' are
@@ -113,6 +114,8 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
                   {STATUS_LABEL[order.status]}
                 </span>
               </div>
+
+              <OrderItemsList items={order.items} compact />
 
               <div className="bg-gray-50 rounded-xl p-3 mb-3 text-sm text-gray-600">
                 <p className="text-xs text-gray-400 mb-1">Delivery Address</p>

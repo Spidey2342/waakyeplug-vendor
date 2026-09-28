@@ -4,16 +4,32 @@ import OverviewTab from './tabs/OverviewTab';
 import OrdersTab from './tabs/OrdersTab';
 import MenuTab from './tabs/MenuTab';
 import SettingsTab from './tabs/SettingsTab';
+import HistoryTab from './tabs/HistoryTab';
 import type { Vendor } from '../lib/api';
 
-export default function Dashboard({ vendor, onVendorUpdated }: { vendor: Vendor; onVendorUpdated: (v: Vendor) => void }) {
+export default function Dashboard({
+  vendor,
+  onVendorUpdated,
+  onVendorRemoved,
+}: {
+  vendor: Vendor;
+  onVendorUpdated: (v: Vendor) => void;
+  onVendorRemoved: (vendorId: string) => void;
+}) {
   const [active, setActive] = useState('Overview');
 
   const tabs: Record<string, JSX.Element> = {
     Overview: <OverviewTab vendor={vendor} />,
     Orders: <OrdersTab vendor={vendor} />,
+    History: <HistoryTab vendor={vendor} />,
     Menu: <MenuTab vendor={vendor} />,
-    Settings: <SettingsTab vendor={vendor} onVendorUpdated={onVendorUpdated} />,
+    Settings: (
+      <SettingsTab
+        vendor={vendor}
+        onVendorUpdated={onVendorUpdated}
+        onVendorRemoved={onVendorRemoved}
+      />
+    ),
   };
 
   return (
