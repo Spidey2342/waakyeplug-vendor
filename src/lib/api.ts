@@ -172,29 +172,52 @@ export async function deleteVendorMenuItems(vendorId: string) {
 
 export type DeleteVendorResult = { outcome: 'deleted' } | { outcome: 'archived'; message: string };
 
+const ARCHIVED_VENDOR_MESSAGE =
+  'Vendor removed from the platform. Their menu is cleared; past orders stay in History.';
+
+function isForeignKeyDeleteError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === '23503'
+    || /foreign key|violates.*constraint|referenced/i.test(error.message ?? '')
+  );
+}
+
+async function archiveVendorRecord(vendorId: string): Promise<DeleteVendorResult> {
+  const updated = await updateVendor(vendorId, { status: 'suspended', is_open: false });
+  if (updated.status !== 'suspended') {
+    throw new Error('Could not remove this vendor from the platform.');
+  }
+  return { outcome: 'archived', message: ARCHIVED_VENDOR_MESSAGE };
+}
+
 async function deleteVendorDirect(vendorId: string): Promise<DeleteVendorResult> {
   await deleteVendorMenuItems(vendorId);
 
-  const { error: vendorDeleteError } = await supabase.from('vendors').delete().eq('id', vendorId);
-  if (!vendorDeleteError) return { outcome: 'deleted' };
+  const { data: deletedRows, error: vendorDeleteError } = await supabase
+    .from('vendors')
+    .delete()
+    .eq('id', vendorId)
+    .select('id');
 
-  const fkBlocked =
-    vendorDeleteError.code === '23503'
-    || /foreign key|violates.*constraint|referenced/i.test(vendorDeleteError.message ?? '');
+  if (vendorDeleteError) {
+    if (isForeignKeyDeleteError(vendorDeleteError)) return archiveVendorRecord(vendorId);
+    throw vendorDeleteError;
+  }
 
-  if (!fkBlocked) throw vendorDeleteError;
+  if (deletedRows && deletedRows.length > 0) {
+    const stillThere = await getVendorById(vendorId);
+    if (!stillThere) return { outcome: 'deleted' };
+  }
 
-  await updateVendor(vendorId, { status: 'suspended', is_open: false });
+  const existing = await getVendorById(vendorId);
+  if (!existing) return { outcome: 'deleted' };
 
-  return {
-    outcome: 'archived',
-    message:
-      'This vendor has past orders, so the shop was archived instead of deleted. Order history is kept under History.',
-  };
+  // RLS often returns success with zero rows — fall back to archive so the shop disappears from the app.
+  return archiveVendorRecord(vendorId);
 }
 
 /** Optional edge path when `delete-vendor` is deployed on the Supabase project. */
-async function tryDeleteVendorEdge(vendorId: string, accessToken: string): Promise<boolean> {
+async function tryDeleteVendorEdge(vendorId: string, accessToken: string): Promise<DeleteVendorResult | null> {
   try {
     const edgeRes = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vendor`,
@@ -208,10 +231,20 @@ async function tryDeleteVendorEdge(vendorId: string, accessToken: string): Promi
       }
     );
 
-    if (edgeRes.ok) return true;
+    if (edgeRes.ok) {
+      try {
+        const body = await edgeRes.json();
+        if (body?.outcome === 'archived') {
+          return { outcome: 'archived', message: ARCHIVED_VENDOR_MESSAGE };
+        }
+      } catch {
+        /* default to hard delete */
+      }
+      return { outcome: 'deleted' };
+    }
 
     // Not deployed — use direct Supabase deletes below.
-    if (edgeRes.status === 404 || edgeRes.status === 405 || edgeRes.status === 501) return false;
+    if (edgeRes.status === 404 || edgeRes.status === 405 || edgeRes.status === 501) return null;
 
     let message = 'Could not delete this vendor.';
     try {
@@ -226,7 +259,7 @@ async function tryDeleteVendorEdge(vendorId: string, accessToken: string): Promi
     if (err instanceof Error && err.message !== 'Failed to fetch' && !err.message.includes('fetch')) {
       throw err;
     }
-    return false;
+    return null;
   }
 }
 
@@ -238,8 +271,8 @@ export async function deleteVendor(vendorId: string): Promise<DeleteVendorResult
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('You must be signed in as admin to delete vendors');
 
-  const edgeDeleted = await tryDeleteVendorEdge(vendorId, session.access_token);
-  if (edgeDeleted) return { outcome: 'deleted' };
+  const edgeResult = await tryDeleteVendorEdge(vendorId, session.access_token);
+  if (edgeResult) return edgeResult;
 
   return deleteVendorDirect(vendorId);
 }

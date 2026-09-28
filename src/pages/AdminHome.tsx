@@ -16,6 +16,23 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [showAddVendor, setShowAddVendor] = useState(false);
+  const [showArchivedVendors, setShowArchivedVendors] = useState(false);
+
+  const archivedCount = vendors.filter((v) => v.status === 'suspended').length;
+  const visibleVendors = showArchivedVendors
+    ? vendors
+    : vendors.filter((v) => v.status !== 'suspended');
+
+  const applyVendorRemoval = (vendorId: string, outcome: 'deleted' | 'archived') => {
+    setSelectedVendor(null);
+    if (outcome === 'deleted') {
+      setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+    } else {
+      setVendors((prev) => prev.map((v) => (
+        v.id === vendorId ? { ...v, status: 'suspended', is_open: false } : v
+      )));
+    }
+  };
 
   const loadVendors = async () => {
     setLoading(true);
@@ -48,10 +65,7 @@ export default function AdminHome() {
             setSelectedVendor(v);
             setVendors((prev) => prev.map((existing) => (existing.id === v.id ? v : existing)));
           }}
-          onVendorRemoved={(vendorId) => {
-            setVendors((prev) => prev.filter((v) => v.id !== vendorId));
-            setSelectedVendor(null);
-          }}
+          onVendorRemoved={(vendorId, outcome) => applyVendorRemoval(vendorId, outcome)}
         />
       </div>
     );
@@ -97,30 +111,45 @@ export default function AdminHome() {
           <RidersTab />
         ) : (
           <>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
                 <p className="text-sm text-gray-400 mt-0.5">Select a vendor to manage their menu, or add a new one.</p>
               </div>
-              <button
-                onClick={() => setShowAddVendor(true)}
-                className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
-              >
-                <Plus size={16} /> Add Vendor
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {archivedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowArchivedVendors((v) => !v)}
+                    className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-200 bg-white transition"
+                  >
+                    {showArchivedVendors ? 'Hide archived' : `Show archived (${archivedCount})`}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddVendor(true)}
+                  className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+                >
+                  <Plus size={16} /> Add Vendor
+                </button>
+              </div>
             </div>
 
             {loading ? (
               <p className="text-sm text-gray-400 text-center py-12">Loading vendors...</p>
-            ) : vendors.length === 0 ? (
+            ) : visibleVendors.length === 0 ? (
               <div className="bg-white rounded-2xl p-10 border border-gray-100 text-center">
                 <Store size={28} className="text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No vendors yet — add your first one.</p>
+                <p className="text-sm text-gray-400">
+                  {vendors.length === 0
+                    ? 'No vendors yet — add your first one.'
+                    : 'No active vendors. Turn on “Show archived” to see removed shops.'}
+                </p>
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="divide-y divide-gray-50">
-                  {vendors.map((vendor) => (
+                  {visibleVendors.map((vendor) => (
                     <div
                       key={vendor.id}
                       className="flex items-center gap-2 px-5 py-4 hover:bg-gray-50 transition"
@@ -168,13 +197,12 @@ export default function AdminHome() {
                           setDeletingVendorId(vendor.id);
                           try {
                             const result = await deleteVendor(vendor.id);
-                            if (result.outcome === 'deleted') {
-                              setVendors((prev) => prev.filter((v) => v.id !== vendor.id));
-                              toastSuccess(`"${vendor.business_name}" was removed.`);
-                            } else {
-                              toastSuccess(result.message);
-                              await loadVendors();
-                            }
+                            applyVendorRemoval(vendor.id, result.outcome);
+                            toastSuccess(
+                              result.outcome === 'deleted'
+                                ? `"${vendor.business_name}" was removed.`
+                                : result.message,
+                            );
                           } catch (err: any) {
                             toastError(err.message || 'Could not remove vendor.');
                           } finally {

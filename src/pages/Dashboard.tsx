@@ -14,7 +14,7 @@ export default function Dashboard({
 }: {
   vendor: Vendor;
   onVendorUpdated: (v: Vendor) => void;
-  onVendorRemoved: (vendorId: string) => void;
+  onVendorRemoved: (vendorId: string, outcome: 'deleted' | 'archived') => void;
 }) {
   const [active, setActive] = useState('Overview');
 

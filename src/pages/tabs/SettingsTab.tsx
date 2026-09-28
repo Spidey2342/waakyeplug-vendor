@@ -17,7 +17,7 @@ export default function SettingsTab({
 }: {
   vendor: Vendor;
   onVendorUpdated: (v: Vendor) => void;
-  onVendorRemoved: (vendorId: string) => void;
+  onVendorRemoved: (vendorId: string, outcome: 'deleted' | 'archived') => void;
 }) {
   const { toastSuccess, toastError } = useToast();
   const [deletingVendor, setDeletingVendor] = useState(false);
@@ -402,11 +402,13 @@ export default function SettingsTab({
             setDeletingVendor(true);
             try {
               const result = await deleteVendor(vendor.id);
-              if (result.outcome === 'deleted') {
-                toastSuccess(`"${vendor.business_name}" was removed.`);
-                onVendorRemoved(vendor.id);
-              } else {
-                toastSuccess(result.message);
+              toastSuccess(
+                result.outcome === 'deleted'
+                  ? `"${vendor.business_name}" was removed.`
+                  : result.message,
+              );
+              onVendorRemoved(vendor.id, result.outcome);
+              if (result.outcome === 'archived') {
                 const refreshed = await getVendorById(vendor.id);
                 if (refreshed) onVendorUpdated(refreshed);
               }
