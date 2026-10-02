@@ -1,20 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getVendorOrders, cancelOrder, type Vendor, type Order } from '../../lib/api';
+import { getStatusLabel } from '../../lib/orderStatusLabels';
 import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { Loader2, Phone, Bike, X } from 'lucide-react';
 import OrderItemsList from '../../components/OrderItemsList';
-
-// Canonical order status enum (2026-09-12 migration) — matches the DB
-// check constraint exactly. 'pending'/'ready'/'accepted'/'preparing' are
-// ghosts that nothing may write anymore.
-const STATUS_LABEL: Record<Order['status'], string> = {
-  available: 'Available to Riders',
-  rider_assigned: 'Rider Assigned',
-  picked_up: 'Picked Up',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-};
 
 const statusStyle: Record<Order['status'], string> = {
   available: 'bg-purple-50 text-purple-700',
@@ -129,7 +119,7 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
                   )}
                 </div>
                 <span className={`text-xs font-semibold px-3 py-1 rounded-full ${statusStyle[order.status]}`}>
-                  {STATUS_LABEL[order.status]}
+                  {getStatusLabel(order.status)}
                 </span>
               </div>
 
@@ -190,7 +180,7 @@ export default function OrdersTab({ vendor }: { vendor: Vendor }) {
                 Order for <span className="font-semibold">{cancelModalOrder.profiles?.full_name ?? 'Customer'}</span>
               </p>
               <p className="text-xs text-gray-500">
-                Current status: <span className="font-medium">{STATUS_LABEL[cancelModalOrder.status]}</span>
+                Current status: <span className="font-medium">{getStatusLabel(cancelModalOrder.status)}</span>
               </p>
               {cancelModalOrder.status === 'picked_up' && (
                 <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
