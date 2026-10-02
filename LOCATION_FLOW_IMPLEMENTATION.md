@@ -31,7 +31,7 @@
    - Button labels: "Set Shop Location", "Update Shop Location", "Use my current location", "Confirm this location"
    - Search placeholder: "Search for area, landmark, or city name..."
    - Status: "Location is set" (not "GPS coordinates saved")
-   - Coordinate numbers shown only in tiny footer text for verification
+   - **Zero coordinate numbers shown anywhere in UI** - admins see only map visual and status messages
 
 ### Updated Components
 
@@ -114,7 +114,8 @@ handleLocationConfirm(lat, lng)
 - [x] Confirm button saves coordinates
 - [x] Cancel button closes without saving
 - [x] No technical jargon visible in UI
-- [x] Coordinates saved match map view
+- [x] No coordinate numbers visible anywhere in UI
+- [x] Coordinates saved to database match map view
 
 ## Files Changed
 
@@ -154,3 +155,4 @@ modified:   src/pages/tabs/SettingsTab.tsx
 - No external API keys needed for basic functionality
 - Location search works for any global location (not Ghana-only)
 - Coordinates stored in existing `latitude`/`longitude` columns (no schema changes)
+- **Coordinate display removed** - admins never see raw latitude/longitude numbers in any part of the UI
