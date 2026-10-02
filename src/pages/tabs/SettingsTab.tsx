@@ -9,6 +9,7 @@ import {
   toTimeInputValue,
   vendorAcceptingOrders,
 } from '../../lib/vendorHours';
+import LocationPicker from '../../components/LocationPicker';
 
 export default function SettingsTab({
   vendor,
@@ -60,7 +61,8 @@ export default function SettingsTab({
     phone: vendor.phone ?? '',
   });
   const [savingShop, setSavingShop] = useState(false);
-  const [locatingGps, setLocatingGps] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
   const [hoursForm, setHoursForm] = useState({
     opens: toTimeInputValue(vendor.daily_opens_at),
     closes: toTimeInputValue(vendor.daily_closes_at),
@@ -92,47 +94,21 @@ export default function SettingsTab({
     }
   };
 
-  const handleSetGpsLocation = () => {
-    if (!navigator.geolocation) {
-      toastError('Your browser does not support location access.');
-      return;
+  const handleLocationConfirm = async (lat: number, lng: number) => {
+    setSavingLocation(true);
+    try {
+      const updated = await updateVendor(vendor.id, {
+        latitude: lat,
+        longitude: lng,
+      });
+      onVendorUpdated(updated);
+      setShowLocationPicker(false);
+      toastSuccess('Shop location saved. Customers can now see how far they are from you.');
+    } catch (err: any) {
+      toastError(err.message || 'Could not save location.');
+    } finally {
+      setSavingLocation(false);
     }
-    setLocatingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const ACCURACY_THRESHOLD_METERS = 1000;
-        
-        if (!position.coords.accuracy || position.coords.accuracy > ACCURACY_THRESHOLD_METERS) {
-          toastError(
-            `Location accuracy too low (${position.coords.accuracy ? Math.round(position.coords.accuracy) + 'm' : 'unknown'}). ` +
-            'Please enable Precise Location in your device settings and stand outdoors with a clear view of the sky.'
-          );
-          setLocatingGps(false);
-          return;
-        }
-
-        try {
-          const updated = await updateVendor(vendor.id, {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-          onVendorUpdated(updated);
-          toastSuccess(
-            `Shop location saved (accuracy: ${Math.round(position.coords.accuracy)}m). ` +
-            'Customers can now see how far they are from you.'
-          );
-        } catch (err: any) {
-          toastError(err.message || 'Could not save location.');
-        } finally {
-          setLocatingGps(false);
-        }
-      },
-      (err) => {
-        toastError(err.message || 'Could not get your location. Make sure location access is allowed.');
-        setLocatingGps(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
   };
 
   const handleHoursSubmit = async (e: React.FormEvent) => {
@@ -354,32 +330,31 @@ export default function SettingsTab({
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-2">
           <MapPin size={18} className="text-orange-600" />
-          <h2 className="font-bold text-gray-900">Shop GPS Location</h2>
+          <h2 className="font-bold text-gray-900">Shop Location</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          This is what customers use to see how far they are from you — it's separate from the address text above.
-          Stand at your shop and tap the button below.
+          Set where your shop is so customers can see how far they are from you. You can use your current location, search for an area or landmark, or drop a pin on the map.
         </p>
 
         {vendor.latitude && vendor.longitude ? (
           <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4">
             <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-            <p className="text-sm text-green-800">Location saved ({vendor.latitude.toFixed(4)}, {vendor.longitude.toFixed(4)})</p>
+            <p className="text-sm text-green-800">Location is set</p>
           </div>
         ) : (
           <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-4">
             <MapPin size={16} className="text-yellow-600 shrink-0" />
-            <p className="text-sm text-yellow-800">No GPS location set yet — customers won't see a distance for your shop.</p>
+            <p className="text-sm text-yellow-800">No location set yet — customers won't see a distance for your shop.</p>
           </div>
         )}
 
         <button
-          onClick={handleSetGpsLocation}
-          disabled={locatingGps}
+          onClick={() => setShowLocationPicker(true)}
+          disabled={savingLocation}
           className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
         >
-          {locatingGps ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}
-          {locatingGps ? 'Getting Location...' : vendor.latitude ? 'Update My Location' : 'Use My Current Location'}
+          {savingLocation ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}
+          {vendor.latitude ? 'Update Shop Location' : 'Set Shop Location'}
         </button>
       </div>
 
@@ -440,6 +415,15 @@ export default function SettingsTab({
           </button>
         </form>
       </div>
+
+      {showLocationPicker && (
+        <LocationPicker
+          initialLat={vendor.latitude}
+          initialLng={vendor.longitude}
+          onConfirm={handleLocationConfirm}
+          onCancel={() => setShowLocationPicker(false)}
+        />
+      )}
     </div>
   );
 }
