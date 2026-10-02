@@ -211,28 +211,22 @@ export default function LocationPicker({
           </div>
         </div>
 
-        <div className="p-5 border-t border-gray-100 flex items-center justify-between gap-3">
-          <div className="flex-1 text-xs text-gray-500">
-            <span className="font-medium text-gray-700">Selected location:</span>{' '}
-            {markerPosition[0].toFixed(4)}, {markerPosition[1].toFixed(4)}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg border border-gray-200 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => onConfirm(markerPosition[0], markerPosition[1])}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
-            >
-              <MapPin size={16} />
-              Confirm this location
-            </button>
-          </div>
+        <div className="p-5 border-t border-gray-100 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg border border-gray-200 transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(markerPosition[0], markerPosition[1])}
+            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
+          >
+            <MapPin size={16} />
+            Confirm this location
+          </button>
         </div>
       </div>
     </div>
