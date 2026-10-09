@@ -164,3 +164,8 @@ Despite the repo name, this is the **Admin dashboard**, not a vendor portal:
 ### 2026-09-15 — STATUS CORRECTION: V1 deployed since 2026-09-12; fix-order list reconciled ✅
 - The 2026-09-09 V1 entry still read "Deployment pending (needs `supabase functions deploy` + Supabase login)" — stale. add-rider/decline-rider/approve-rider have been live since the 2026-09-12 deploy (add-rider v7 / decline-rider v2 / approve-rider v1; anon approve/decline → 401, anon add-rider → dormant application that can't log in). No pending deployment anywhere in the vendor app.
 - §6 fix-order items 4–5 and the §7 Lumora item updated to match reality: P1+V3 closed 2026-09-12, P2+V4 closed 2026-09-13, V5 closed 2026-09-15. Only genuinely open Lumora decisions left: P3 breakfast scope, P4 opening hours.
+
+### 2026-09-15 — PUSH + dependency upgrade ✅
+- `react-router-dom` upgraded to `^7.18.4` (clears the vendor panel's last remaining audit vuln) — committed `8fb1879` and pushed to Spidey2342 main (remote head verified via `ls-remote`).
+- Waakye-Plug2's dependency security fixes (npm audit fix) pushed same day; Waakye-plug-rider already up to date.
+- Git note for this machine: the global GCM→gh credential-helper delegation crashes silently (exit 128, no output) when git pushes. Working pattern: inline-token URL built from `gh auth token` with `-c credential.helper=` — token resolved at runtime, never printed or stored.

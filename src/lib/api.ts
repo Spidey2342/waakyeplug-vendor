@@ -19,16 +19,27 @@ export type Vendor = {
   created_at: string;
 };
 
+// Everything that comes inside a Waakye pack — the vendor ticks which of
+// their Extras a served pack includes, and this is what customers see when
+// they open the pack.
+export type MenuItemIncluded = {
+  id: string;
+  name: string;
+  quantity: number;
+};
+
 export type MenuItem = {
   id: string;
   vendor_id: string;
-  category: 'base' | 'protein' | 'extra' | 'drink' | 'breakfast_item' | 'combo';
+  category: 'base' | 'protein' | 'extra' | 'drink' | 'breakfast_item' | 'combo' | 'waakye';
   name: string;
   description: string | null;
   price: number; // exact price if pricing_type is 'fixed', minimum price if 'variable'
   pricing_type: 'fixed' | 'variable';
   image_url: string | null;
   is_available: boolean;
+  /** Composed contents of a Waakye pack (category 'waakye'). Empty for all other categories. */
+  included_items?: MenuItemIncluded[] | null;
 };
 
 export type Order = {
@@ -291,11 +302,11 @@ export async function getMenuItems(vendorId: string): Promise<MenuItem[]> {
 }
 
 export async function addMenuItem({
-  vendorId, category, name, description, price, pricingType, imageUrl,
-}: { vendorId: string; category: string; name: string; description?: string | null; price: number; pricingType: 'fixed' | 'variable'; imageUrl?: string | null }) {
+  vendorId, category, name, description, price, pricingType, imageUrl, includedItems,
+}: { vendorId: string; category: string; name: string; description?: string | null; price: number; pricingType: 'fixed' | 'variable'; imageUrl?: string | null; includedItems?: MenuItemIncluded[] }) {
   const { data, error } = await supabase
     .from('vendor_menu_items')
-    .insert({ vendor_id: vendorId, category, name, description: description ?? null, price, pricing_type: pricingType, image_url: imageUrl ?? null })
+    .insert({ vendor_id: vendorId, category, name, description: description ?? null, price, pricing_type: pricingType, image_url: imageUrl ?? null, included_items: includedItems ?? [] })
     .select()
     .single();
 
@@ -328,7 +339,7 @@ export async function addMenuItems(
   return data as MenuItem[];
 }
 
-export async function updateMenuItem(id: string, updates: Partial<Pick<MenuItem, 'name' | 'description' | 'price' | 'is_available' | 'pricing_type' | 'image_url'>>) {
+export async function updateMenuItem(id: string, updates: Partial<Pick<MenuItem, 'name' | 'description' | 'price' | 'is_available' | 'pricing_type' | 'image_url' | 'included_items'>>) {
   const { data, error } = await supabase
     .from('vendor_menu_items')
     .update(updates)

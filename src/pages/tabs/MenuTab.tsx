@@ -4,7 +4,7 @@ import {
   type Vendor, type MenuItem,
 } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
-import { Plus, Trash2, X, Loader2, Camera, ImageOff, Wheat, Fish, Salad, CupSoda, Croissant, UtensilsCrossed, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, X, Loader2, Camera, ImageOff, Wheat, Fish, Salad, CupSoda, Croissant, UtensilsCrossed, ChevronRight, Soup, Check } from 'lucide-react';
 
 type ModifierCategory = 'base' | 'protein' | 'extra' | 'drink' | 'breakfast_item';
 
@@ -38,6 +38,7 @@ const DEFAULT_GROUP_SETTINGS: Record<ModifierCategory, GroupSettings> = {
 };
 
 const COMBO_CATEGORY: MenuItem['category'] = 'combo';
+const WAAKYE_CATEGORY: MenuItem['category'] = 'waakye';
 
 function baseDishStorageKey(vendorId: string) {
   return `waakye_vendor_base_dish_${vendorId}`;
@@ -81,7 +82,7 @@ function nextModifierStep(current: ModifierCategory): ModifierCategory {
   return MODIFIER_GROUPS[idx + 1].value;
 }
 
-type AddFlowType = 'customizable' | 'fixed';
+type AddFlowType = 'customizable' | 'fixed' | 'waakye';
 /** `dish` = name/photo/base price; modifier steps use ModifierCategory (e.g. `base` = Size). */
 type CustomizableStep = 'dish' | ModifierCategory;
 
@@ -116,6 +117,8 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
   const [comboImagePreview, setComboImagePreview] = useState<string | null>(null);
   const comboFileInputRef = useRef<HTMLInputElement>(null);
   const [addingCombo, setAddingCombo] = useState(false);
+  // For a Waakye pack: ids of the vendor's own Extra items that come inside it.
+  const [packIncluded, setPackIncluded] = useState<string[]>([]);
 
   const editFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -157,6 +160,7 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
     setComboItem({ name: '', description: '', price: '' });
     setComboImageFile(null);
     setComboImagePreview(null);
+    setPackIncluded([]);
     const stored = loadBaseDish(vendor.id);
     if (stored) {
       setBaseDish(stored);
@@ -310,6 +314,42 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
     }
   };
 
+  const handleAddWaakye = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!comboItem.name.trim() || !comboItem.price) return;
+    setAddingCombo(true);
+    try {
+      const created = await addMenuItem({
+        vendorId: vendor.id,
+        category: WAAKYE_CATEGORY,
+        name: comboItem.name,
+        description: comboItem.description.trim() || null,
+        price: Number(comboItem.price),
+        pricingType: 'fixed',
+        includedItems: items
+          .filter((i) => i.category === 'extra' && packIncluded.includes(i.id))
+          .map((i) => ({ id: i.id, name: i.name, quantity: 1 })),
+      });
+
+      let finalItem = created;
+      if (comboImageFile) {
+        const imageUrl = await uploadMenuItemImage(vendor.id, comboImageFile);
+        finalItem = await updateMenuItem(created.id, { image_url: imageUrl });
+      }
+
+      setItems((prev) => [...prev, finalItem]);
+      setComboItem({ name: '', description: '', price: '' });
+      setComboImageFile(null);
+      setComboImagePreview(null);
+      setPackIncluded([]);
+      toastSuccess(`"${finalItem.name}" added as a Waakye pack.`);
+    } catch (err: any) {
+      toastError(err.message || 'Could not add item.');
+    } finally {
+      setAddingCombo(false);
+    }
+  };
+
   const toggleAvailable = async (item: MenuItem) => {
     setSavingId(item.id);
     try {
@@ -378,7 +418,8 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
     }
   };
 
-  const modifierItems = items.filter((i) => i.category !== COMBO_CATEGORY);
+  const modifierItems = items.filter((i) => i.category !== COMBO_CATEGORY && i.category !== WAAKYE_CATEGORY);
+  const waakyeItems = items.filter((i) => i.category === WAAKYE_CATEGORY);
   const comboItems = items.filter((i) => i.category === COMBO_CATEGORY);
   const activeGroup = MODIFIER_GROUPS.find((g) => g.value === modifierCategory);
   const activeGroupSettings = groupSettings[modifierCategory];
@@ -417,6 +458,16 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
             <Trash2 size={14} />
           </button>
         </div>
+
+        {item.included_items && item.included_items.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {item.included_items.map((inc) => (
+              <span key={inc.id} className="text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-100 px-1.5 py-0.5 rounded-full">
+                {inc.quantity > 1 ? `${inc.quantity}x ` : ''}{inc.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         <input
           type="text"
@@ -568,6 +619,14 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
                   <p className="text-sm font-bold text-gray-900">Fixed Combo / Single Item</p>
                   <p className="text-xs text-gray-500 mt-1">One fixed dish at one fixed price — no customization (e.g. Waakye Plug special).</p>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setAddFlowType('waakye')}
+                  className="text-left rounded-xl border border-gray-200 hover:border-orange-400 p-4 transition bg-gray-50 hover:bg-orange-50/30"
+                >
+                  <p className="text-sm font-bold text-gray-900">Waakye Pack</p>
+                  <p className="text-xs text-gray-500 mt-1">A complete served pack at one price — tick the Extras that come inside it.</p>
+                </button>
               </div>
               <button
                 type="button"
@@ -579,13 +638,15 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
             </div>
           )}
 
-          {addFlowType === 'fixed' && (
+          {addFlowType === 'fixed' || addFlowType === 'waakye' ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-gray-800">Fixed Combo / Single Item</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {addFlowType === 'waakye' ? 'Waakye Pack' : 'Fixed Combo / Single Item'}
+                </p>
                 <button type="button" onClick={() => setAddFlowType(null)} className="text-xs text-gray-500 hover:text-gray-700">Change type</button>
               </div>
-              <form onSubmit={handleAddCombo} className="flex flex-col gap-4">
+              <form onSubmit={addFlowType === 'waakye' ? handleAddWaakye : handleAddCombo} className="flex flex-col gap-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="shrink-0">
                     <label className="block text-xs font-medium text-gray-500 mb-1">Photo</label>
@@ -646,17 +707,55 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
                   </div>
                 </div>
 
+                {addFlowType === 'waakye' && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">What's included</label>
+                    {items.filter((i) => i.category === 'extra').length === 0 ? (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        No Extras in your menu yet — add some under the customizable dish's Extras group, then come back and tick the ones this pack comes with.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {items.filter((i) => i.category === 'extra').map((ext) => {
+                          const selected = packIncluded.includes(ext.id);
+                          return (
+                            <button
+                              key={ext.id}
+                              type="button"
+                              onClick={() =>
+                                setPackIncluded((prev) =>
+                                  selected ? prev.filter((id) => id !== ext.id) : [...prev, ext.id]
+                                )
+                              }
+                              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                                selected
+                                  ? 'bg-orange-600 border-orange-600 text-white'
+                                  : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'
+                              }`}
+                            >
+                              {selected && <Check size={11} />}{ext.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {packIncluded.length > 0 && (
+                      <p className="text-xs text-gray-400 mt-2">{packIncluded.length} selected — these come inside the pack automatically.</p>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={addingCombo}
                   className="self-start flex items-center gap-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
                 >
                   {addingCombo ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                  {addingCombo ? 'Adding...' : 'Add to Menu'}
+                  {addingCombo ? 'Adding...' : addFlowType === 'waakye' ? 'Add Waakye Pack' : 'Add to Menu'}
                 </button>
               </form>
             </>
-          )}
+          ) : null}
 
           {addFlowType === 'customizable' && (
             <>
@@ -939,6 +1038,18 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
               </div>
             </div>
           )}
+
+          {waakyeItems.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Soup size={16} className="text-orange-600" />
+                <h2 className="font-bold text-gray-900 text-sm">Waakye Packs</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {waakyeItems.map(renderItemCard)}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -946,7 +1057,7 @@ export default function MenuTab({ vendor }: { vendor: Vendor }) {
         <div className="bg-white rounded-2xl p-10 border border-gray-100 text-center">
           <UtensilsCrossed size={28} className="text-gray-300 mx-auto mb-2" />
           <p className="text-sm text-gray-400">
-            Your menu is empty. Choose a customizable dish or a fixed combo to get started.
+            Your menu is empty. Choose a customizable dish, a fixed combo, or add a Waakye pack to get started.
           </p>
         </div>
       )}

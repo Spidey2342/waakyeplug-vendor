@@ -3,3 +3,7 @@ dist
 dist-ssr
 *.local
 .env
+
+# Local build/dev scratch files
+*.log
+tsc-out.txt
